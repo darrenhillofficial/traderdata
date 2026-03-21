@@ -288,6 +288,8 @@ if(isAuthed()){
 <button class="nb" data-p="movers" onclick="go('movers')">Movers</button>
 <button class="nb" data-p="news" onclick="go('news')">News</button>
 <button class="nb" data-p="fx" onclick="go('fx')">FX Strength</button>
+<button class="nb" data-p="cbpolicy" onclick="go('cbpolicy')">CB Policy</button>
+<button class="nb" data-p="commfx" onclick="go('commfx')">Comm→FX</button>
 <button class="nb" data-p="econ" onclick="go('econ')">Econ Calendar</button>
 <button class="nb" data-p="portfolio" onclick="go('portfolio')">Portfolio</button>
 <button class="nb" data-p="journal" onclick="go('journal')">Journal</button>
@@ -348,6 +350,26 @@ if(isAuthed()){
 <div style="font-size:10px;font-family:var(--mono);color:var(--t2);font-weight:600;letter-spacing:0.04em;text-transform:uppercase;margin-bottom:8px">ETF Discount Status</div>
 <div id="dashETFStatus" class="grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px"></div>
 </div>
+</div>
+
+<!-- CENTRAL BANK POLICY CURVES -->
+<div id="p-cbpolicy" class="pane">
+<div style="margin-bottom:14px"><h2 style="font-size:14px;font-weight:700;margin-bottom:3px">Central Bank Policy Curves</h2>
+<p class="sub">Forward-looking rate expectations by currency. See which central banks are hawkish (tightening/hiking) vs dovish (easing/cutting). Spot macro trend shifts forming in FX before they happen.</p></div>
+<button class="btn btn-p" onclick="renderCBPolicy()" style="margin-bottom:14px">Load Policy Data</button>
+<div id="cbOverview" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin-bottom:16px"></div>
+<div id="cbCurve" style="margin-bottom:14px"></div>
+<div id="cbInsights"></div>
+</div>
+
+<!-- COMMODITY → FX MAPPING -->
+<div id="p-commfx" class="pane">
+<div style="margin-bottom:14px"><h2 style="font-size:14px;font-weight:700;margin-bottom:3px">Commodity → FX Impact Map</h2>
+<p class="sub">When commodity prices move, exporter currencies benefit and importer currencies suffer. This maps the exposure so you can instantly link macro events → commodity moves → FX impacts.</p></div>
+<button class="btn btn-p" onclick="loadCommFX()" id="commfxBtn" style="margin-bottom:14px">Load Commodity Prices</button>
+<div id="commPrices" style="margin-bottom:14px"></div>
+<div id="commFXMap" style="margin-bottom:14px"></div>
+<div id="commInsights"></div>
 </div>
 
 <!-- ECONOMIC CALENDAR -->
@@ -961,7 +983,7 @@ ed.forEach((e,i)=>{if(e.ld)rCard(i)});
 redrawAll();
 }
 (function(){const s=localStorage.getItem('t-thm')||'dark';document.documentElement.setAttribute('data-theme',s);document.addEventListener('DOMContentLoaded',function(){document.body.className=s})})();
-const PANES=['dash','etf','mean','metals','screener','compound','dca','cashvs','sentiment','heatmap','movers','news','fx','econ','portfolio','journal','watchlist','riskcalc','monte','charts','learn','backtest','alerts'];
+const PANES=['dash','etf','mean','metals','screener','compound','dca','cashvs','sentiment','heatmap','movers','news','fx','cbpolicy','commfx','econ','portfolio','journal','watchlist','riskcalc','monte','charts','learn','backtest','alerts'];
 function go(p){PANES.forEach(n=>{const el=document.getElementById('p-'+n);if(el)el.classList.toggle('vis',n===p);document.querySelector(`[data-p="${n}"]`)?.classList.toggle('act',n===p)});if(p==='compound')calcUpd();if(p==='sentiment')loadSentiment();if(p==='heatmap')loadHeatmap();if(p==='movers')loadMovers();if(p==='news')loadNews();if(p==='fx')loadFX();if(p==='cashvs')loadCashVs();if(p==='dash')loadDashboard();if(p==='econ')loadEcon();if(p==='portfolio')refreshPortfolio();if(p==='journal')renderJournal();if(p==='watchlist')refreshWatchlist();if(p==='learn')renderLessons();if(p==='charts')loadTVChart();if(p==='dca'){}}
 let sett={notif:false,sound:true,banner:true,refMin:5};
 // ═══ ETF ═══
@@ -2771,6 +2793,289 @@ container.appendChild(wrapper);
 tvLoaded=true;
 }
 
+// ═══ CENTRAL BANK POLICY CURVES ═══
+const CB_DATA = [
+  {
+    currency: 'USD', flag: '🇺🇸', bank: 'Federal Reserve',
+    currentRate: 4.50, 
+    history: [{date:'2024-01',rate:5.50},{date:'2024-06',rate:5.50},{date:'2024-09',rate:5.25},{date:'2024-11',rate:4.75},{date:'2024-12',rate:4.50},{date:'2025-01',rate:4.50},{date:'2025-03',rate:4.50}],
+    forward: [{date:'2025-06',rate:4.25},{date:'2025-09',rate:4.00},{date:'2025-12',rate:3.75},{date:'2026-03',rate:3.50}],
+    stance: 'cautious', stanceLabel: 'Cautious Easing', stanceColor: '#F59E0B',
+    nextMeeting: 'May 2025', lastAction: 'Hold (Mar 2025)',
+    narrative: 'Fed paused after 3 cuts in late 2024. Markets expect gradual easing to resume mid-2025 if inflation cooperates. Tariff uncertainty delaying further cuts.'
+  },
+  {
+    currency: 'EUR', flag: '🇪🇺', bank: 'ECB',
+    currentRate: 2.65,
+    history: [{date:'2024-01',rate:4.50},{date:'2024-06',rate:4.25},{date:'2024-09',rate:3.65},{date:'2024-12',rate:3.15},{date:'2025-01',rate:2.90},{date:'2025-03',rate:2.65}],
+    forward: [{date:'2025-06',rate:2.40},{date:'2025-09',rate:2.15},{date:'2025-12',rate:2.00},{date:'2026-03',rate:2.00}],
+    stance: 'dovish', stanceLabel: 'Active Easing', stanceColor: '#EF4444',
+    nextMeeting: 'Apr 2025', lastAction: 'Cut 25bp (Mar 2025)',
+    narrative: 'ECB in aggressive cutting cycle — 6 consecutive cuts since Jun 2024. Growth weak, inflation near target. Terminal rate expected around 2%. EUR bearish bias.'
+  },
+  {
+    currency: 'GBP', flag: '🇬🇧', bank: 'Bank of England',
+    currentRate: 4.50,
+    history: [{date:'2024-01',rate:5.25},{date:'2024-08',rate:5.00},{date:'2024-11',rate:4.75},{date:'2025-02',rate:4.50},{date:'2025-03',rate:4.50}],
+    forward: [{date:'2025-06',rate:4.50},{date:'2025-09',rate:4.50},{date:'2025-12',rate:4.75},{date:'2026-03',rate:5.00}],
+    stance: 'hawkish', stanceLabel: 'Hawkish Shift', stanceColor: '#22C55E',
+    nextMeeting: 'May 2025', lastAction: 'Hold (Mar 2025)',
+    narrative: 'Major shift — BOE held and signalled sticky inflation concerns. Market now pricing potential hikes instead of cuts. GBP strengthening on hawkish repricing.'
+  },
+  {
+    currency: 'JPY', flag: '🇯🇵', bank: 'Bank of Japan',
+    currentRate: 0.50,
+    history: [{date:'2024-01',rate:-0.10},{date:'2024-03',rate:0.10},{date:'2024-07',rate:0.25},{date:'2025-01',rate:0.50},{date:'2025-03',rate:0.50}],
+    forward: [{date:'2025-06',rate:0.50},{date:'2025-09',rate:0.75},{date:'2025-12',rate:0.75},{date:'2026-03',rate:1.00}],
+    stance: 'hawkish', stanceLabel: 'Tightening Cycle', stanceColor: '#22C55E',
+    nextMeeting: 'May 2025', lastAction: 'Hold (Mar 2025)',
+    narrative: 'BOJ ended decades of negative rates. Now in a historic tightening cycle. Markets expect further hikes. JPY bullish as rate differential narrows with USD.'
+  },
+  {
+    currency: 'CHF', flag: '🇨🇭', bank: 'Swiss National Bank',
+    currentRate: 0.25,
+    history: [{date:'2024-01',rate:1.75},{date:'2024-06',rate:1.25},{date:'2024-12',rate:0.50},{date:'2025-03',rate:0.25}],
+    forward: [{date:'2025-06',rate:0.25},{date:'2025-09',rate:0.25},{date:'2025-12',rate:0.25},{date:'2026-03',rate:0.50}],
+    stance: 'neutral', stanceLabel: 'End of Easing', stanceColor: '#6B7280',
+    nextMeeting: 'Jun 2025', lastAction: 'Cut 25bp (Mar 2025)',
+    narrative: 'SNB cut aggressively from 1.75% to 0.25%. Now likely at terminal rate. CHF neutral — easing priced in, limited further downside.'
+  },
+  {
+    currency: 'AUD', flag: '🇦🇺', bank: 'Reserve Bank of Australia',
+    currentRate: 4.10,
+    history: [{date:'2024-01',rate:4.35},{date:'2024-12',rate:4.35},{date:'2025-02',rate:4.10},{date:'2025-03',rate:4.10}],
+    forward: [{date:'2025-06',rate:3.85},{date:'2025-09',rate:3.60},{date:'2025-12',rate:3.35},{date:'2026-03',rate:3.10}],
+    stance: 'dovish', stanceLabel: 'Starting to Ease', stanceColor: '#F59E0B',
+    nextMeeting: 'May 2025', lastAction: 'Cut 25bp (Feb 2025)',
+    narrative: 'RBA finally started cutting after holding longer than peers. Markets expect steady easing cycle through 2025. AUD sensitive to China demand and commodity prices.'
+  },
+  {
+    currency: 'CAD', flag: '🇨🇦', bank: 'Bank of Canada',
+    currentRate: 2.75,
+    history: [{date:'2024-01',rate:5.00},{date:'2024-06',rate:4.75},{date:'2024-10',rate:3.75},{date:'2024-12',rate:3.25},{date:'2025-01',rate:3.00},{date:'2025-03',rate:2.75}],
+    forward: [{date:'2025-06',rate:2.50},{date:'2025-09',rate:2.50},{date:'2025-12',rate:2.50},{date:'2026-03',rate:2.75}],
+    stance: 'dovish', stanceLabel: 'Deep Easing', stanceColor: '#EF4444',
+    nextMeeting: 'Apr 2025', lastAction: 'Cut 25bp (Mar 2025)',
+    narrative: 'BOC cut 225bp since Jun 2024 — most aggressive easing among G7. Approaching terminal rate. CAD weak but tariff risks add uncertainty.'
+  },
+  {
+    currency: 'NZD', flag: '🇳🇿', bank: 'Reserve Bank of NZ',
+    currentRate: 3.75,
+    history: [{date:'2024-01',rate:5.50},{date:'2024-08',rate:5.25},{date:'2024-10',rate:4.75},{date:'2024-11',rate:4.25},{date:'2025-02',rate:3.75}],
+    forward: [{date:'2025-06',rate:3.25},{date:'2025-09',rate:3.00},{date:'2025-12',rate:3.00},{date:'2026-03',rate:3.00}],
+    stance: 'dovish', stanceLabel: 'Active Easing', stanceColor: '#EF4444',
+    nextMeeting: 'May 2025', lastAction: 'Cut 50bp (Feb 2025)',
+    narrative: 'RBNZ cutting aggressively with outsized 50bp moves. NZD under pressure. Approaching neutral rate around 3%.'
+  },
+];
+
+function renderCBPolicy(){
+const overview=document.getElementById('cbOverview');
+const curve=document.getElementById('cbCurve');
+const insights=document.getElementById('cbInsights');
+
+// Sort by stance: hawkish first (bullish currencies), dovish last
+const sorted=[...CB_DATA].sort((a,b)=>{
+  const order={hawkish:0,cautious:1,neutral:2,dovish:3};
+  return (order[a.stance]||2)-(order[b.stance]||2);
+});
+
+// Overview cards
+overview.innerHTML=sorted.map(cb=>{
+  const allRates=[...cb.history.map(h=>h.rate),...cb.forward.map(f=>f.rate)];
+  const peak=Math.max(...allRates);
+  const trough=Math.min(...allRates);
+  const fwdEnd=cb.forward[cb.forward.length-1].rate;
+  const direction=fwdEnd>cb.currentRate?'↑ Hiking':fwdEnd<cb.currentRate?'↓ Cutting':'→ Holding';
+  const dirCol=fwdEnd>cb.currentRate?'var(--green)':fwdEnd<cb.currentRate?'var(--red)':'var(--t3)';
+  
+  return`<div class="card" style="padding:16px;border-left:3px solid ${cb.stanceColor}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:22px">${cb.flag}</span>
+        <div><div style="font-size:14px;font-weight:700">${cb.currency}</div><div style="font-size:9px;color:var(--t3);font-family:var(--mono)">${cb.bank}</div></div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:20px;font-weight:700;font-family:var(--mono)">${cb.currentRate.toFixed(2)}%</div>
+        <div style="font-size:9px;font-family:var(--mono);color:${cb.stanceColor};font-weight:600">${cb.stanceLabel}</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+      <div style="font-size:9px;font-family:var(--mono);padding:3px 8px;border-radius:4px;background:var(--surf);border:1px solid var(--brd)">Next: <strong>${cb.nextMeeting}</strong></div>
+      <div style="font-size:9px;font-family:var(--mono);padding:3px 8px;border-radius:4px;background:var(--surf);border:1px solid var(--brd)">Last: ${cb.lastAction}</div>
+      <div style="font-size:9px;font-family:var(--mono);padding:3px 8px;border-radius:4px;background:var(--surf);border:1px solid var(--brd);color:${dirCol}">${direction} to ${fwdEnd.toFixed(2)}%</div>
+    </div>
+    <!-- Mini rate curve -->
+    <div style="height:50px;position:relative;margin-bottom:8px">
+      <canvas class="cbMiniChart" data-cb="${cb.currency}" style="width:100%;height:50px"></canvas>
+    </div>
+    <div style="font-size:10px;color:var(--t2);line-height:1.6">${cb.narrative}</div>
+  </div>`;
+}).join('');
+
+// Draw mini charts
+document.querySelectorAll('.cbMiniChart').forEach(cv=>{
+  const ccy=cv.getAttribute('data-cb');
+  const cb=CB_DATA.find(c=>c.currency===ccy);if(!cb)return;
+  const cx=cv.getContext('2d'),dp=devicePixelRatio||1,rc=cv.getBoundingClientRect();
+  cv.width=rc.width*dp;cv.height=50*dp;cx.scale(dp,dp);
+  const w=rc.width,h=50,pd={t:4,r:4,b:4,l:4};
+  const pts=[...cb.history.map(h=>h.rate),...cb.forward.map(f=>f.rate)];
+  const mn=Math.min(...pts)*0.95,mx=Math.max(...pts)*1.05,rn=mx-mn||1;
+  const yS=v=>pd.t+(h-pd.t-pd.b)-(((v-mn)/rn)*(h-pd.t-pd.b));
+  const xS=i=>pd.l+(i/(pts.length-1))*(w-pd.l-pd.r);
+  const dk=isDk();
+  // History line (solid)
+  const histLen=cb.history.length;
+  cx.beginPath();
+  for(let i=0;i<histLen;i++){i===0?cx.moveTo(xS(i),yS(pts[i])):cx.lineTo(xS(i),yS(pts[i]))}
+  cx.strokeStyle=cb.stanceColor;cx.lineWidth=2;cx.stroke();
+  // Forward line (dashed)
+  cx.beginPath();cx.moveTo(xS(histLen-1),yS(pts[histLen-1]));
+  for(let i=histLen;i<pts.length;i++)cx.lineTo(xS(i),yS(pts[i]));
+  cx.strokeStyle=cb.stanceColor;cx.lineWidth=1.5;cx.setLineDash([4,3]);cx.stroke();cx.setLineDash([]);
+  // Now dot
+  cx.beginPath();cx.arc(xS(histLen-1),yS(cb.currentRate),3,0,Math.PI*2);cx.fillStyle=cb.stanceColor;cx.fill();
+  // Divider line
+  cx.strokeStyle=dk?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.1)';cx.lineWidth=1;cx.setLineDash([2,2]);
+  cx.beginPath();cx.moveTo(xS(histLen-1),0);cx.lineTo(xS(histLen-1),h);cx.stroke();cx.setLineDash([]);
+});
+
+// Insights
+const hawkish=sorted.filter(c=>c.stance==='hawkish');
+const dovish=sorted.filter(c=>c.stance==='dovish');
+insights.innerHTML=`<div style="padding:12px 14px;background:var(--surf);border:1px solid var(--brd);border-radius:8px;font-size:11px;font-family:var(--mono);color:var(--t2);line-height:1.8">
+<strong style="color:var(--t1);font-size:12px">Macro FX View:</strong><br>
+${hawkish.length?`<span style="color:var(--green)">▲ Bullish:</span> <strong>${hawkish.map(c=>c.currency).join(', ')}</strong> — tightening or hawkish shift. These currencies should strengthen vs dovish peers.<br>`:''}
+${dovish.length?`<span style="color:var(--red)">▼ Bearish:</span> <strong>${dovish.map(c=>c.currency).join(', ')}</strong> — active easing cycles. These currencies are under pressure.<br>`:''}
+<br><strong style="color:var(--t1)">Key Trade Themes:</strong><br>
+${hawkish.length&&dovish.length?`• Sell <strong>${dovish[0].currency}/${hawkish[0].currency}</strong> — weakest vs strongest policy divergence<br>`:''} 
+• <strong>GBP</strong> hawkish pivot is the biggest recent shift — watch for GBP strength vs EUR, AUD, NZD<br>
+• <strong>JPY</strong> tightening cycle is historic — USDJPY downside risk as rate gap narrows<br>
+• Solid line = actual rates. Dashed line = market forward expectations. When the dashed line diverges sharply from current, expect currency moves.
+</div>`;
+}
+
+// ═══ COMMODITY → FX MAPPING ═══
+const COMM_FX_MAP = {
+  'CL=F': { name:'Crude Oil', icon:'🛢️', unit:'/bbl',
+    exporters:['CAD','NOK','RUB'],importers:['JPY','INR','EUR'],
+    exposure:{CAD:0.9,NOK:0.8,RUB:0.7,JPY:-0.8,INR:-0.7,EUR:-0.4} },
+  'GC=F': { name:'Gold', icon:'🥇', unit:'/oz',
+    exporters:['AUD','ZAR','CAD'],importers:['CHF','INR'],
+    exposure:{AUD:0.6,ZAR:0.7,CAD:0.3,CHF:0.5,INR:-0.3} },
+  'HG=F': { name:'Copper', icon:'🔶', unit:'/lb',
+    exporters:['AUD','CLP','PEN'],importers:['CNY','JPY'],
+    exposure:{AUD:0.7,CLP:0.9,PEN:0.8,CNY:-0.5,JPY:-0.3} },
+  'SI=F': { name:'Silver', icon:'🥈', unit:'/oz',
+    exporters:['MXN','AUD','PEN'],importers:['JPY','INR'],
+    exposure:{MXN:0.5,AUD:0.4,PEN:0.6,JPY:-0.3,INR:-0.4} },
+  'NG=F': { name:'Natural Gas', icon:'🔥', unit:'/mmbtu',
+    exporters:['AUD','CAD','NOK'],importers:['EUR','JPY','GBP'],
+    exposure:{AUD:0.4,CAD:0.5,NOK:0.6,EUR:-0.6,JPY:-0.5,GBP:-0.4} },
+  'ZW=F': { name:'Wheat', icon:'🌾', unit:'/bu',
+    exporters:['AUD','CAD','UAH'],importers:['EGP','TRY','JPY'],
+    exposure:{AUD:0.5,CAD:0.3,EGP:-0.7,TRY:-0.6,JPY:-0.2} },
+};
+const FX_NAMES={USD:'US Dollar',EUR:'Euro',GBP:'British Pound',JPY:'Japanese Yen',CHF:'Swiss Franc',AUD:'Australian Dollar',CAD:'Canadian Dollar',NZD:'New Zealand Dollar',NOK:'Norwegian Krone',ZAR:'South African Rand',MXN:'Mexican Peso',RUB:'Russian Ruble',CLP:'Chilean Peso',PEN:'Peruvian Sol',CNY:'Chinese Yuan',INR:'Indian Rupee',EGP:'Egyptian Pound',TRY:'Turkish Lira',UAH:'Ukrainian Hryvnia'};
+const FX_FL={USD:'🇺🇸',EUR:'🇪🇺',GBP:'🇬🇧',JPY:'🇯🇵',CHF:'🇨🇭',AUD:'🇦🇺',CAD:'🇨🇦',NZD:'🇳🇿',NOK:'🇳🇴',ZAR:'🇿🇦',MXN:'🇲🇽',RUB:'🇷🇺',CLP:'🇨🇱',PEN:'🇵🇪',CNY:'🇨🇳',INR:'🇮🇳',EGP:'🇪🇬',TRY:'🇹🇷',UAH:'🇺🇦'};
+
+async function loadCommFX(){
+const btn=document.getElementById('commfxBtn');btn.disabled=true;btn.textContent='Loading...';
+const prices=document.getElementById('commPrices');
+const map=document.getElementById('commFXMap');
+const ins=document.getElementById('commInsights');
+
+// Fetch commodity prices
+const commData=[];
+for(const [sym,info] of Object.entries(COMM_FX_MAP)){
+  const r=await yahooChart(sym,'1mo','1d');
+  const d=parseYahooChart(r);
+  if(d.currentPrice&&d.prevClose){
+    const chg=((d.currentPrice-d.prevClose)/d.prevClose)*100;
+    // Also get 1-month change
+    const closes=d.closes;
+    const monthChg=closes.length>1?((closes[closes.length-1]-closes[0])/closes[0]*100):0;
+    commData.push({sym,...info,price:d.currentPrice,dayChg:chg,monthChg});
+  }
+  await sl(250);
+  showAPIStatus('Loading '+info.name+'...','green');
+}
+
+// Commodity price cards
+prices.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">
+${commData.map(c=>{
+  const dc=c.dayChg>=0?'var(--green)':'var(--red)';
+  const mc=c.monthChg>=0?'var(--green)':'var(--red)';
+  return`<div class="card" style="padding:12px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div><span style="font-size:18px">${c.icon}</span><div style="font-size:12px;font-weight:700;margin-top:2px">${c.name}</div></div>
+      <div style="text-align:right"><div style="font-size:16px;font-weight:700;font-family:var(--mono)">$${c.price.toFixed(2)}</div></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <span style="font-size:10px;font-family:var(--mono);color:${dc}">${c.dayChg>=0?'+':''}${c.dayChg.toFixed(2)}% today</span>
+      <span style="font-size:10px;font-family:var(--mono);color:${mc}">${c.monthChg>=0?'+':''}${c.monthChg.toFixed(1)}% 1mo</span>
+    </div>
+  </div>`;
+}).join('')}</div>`;
+
+// FX Impact Map — aggregate impact across all commodities
+const fxImpact={};
+commData.forEach(c=>{
+  for(const [ccy,exp] of Object.entries(c.exposure)){
+    if(!fxImpact[ccy])fxImpact[ccy]={score:0,drivers:[]};
+    const impact=exp*c.dayChg;
+    fxImpact[ccy].score+=impact;
+    if(Math.abs(c.dayChg)>0.3){
+      fxImpact[ccy].drivers.push({comm:c.name,icon:c.icon,chg:c.dayChg,exp,impact});
+    }
+  }
+});
+
+const fxSorted=Object.entries(fxImpact).sort((a,b)=>b[1].score-a[1].score);
+
+map.innerHTML=`<div style="font-size:10px;font-family:var(--mono);color:var(--t2);font-weight:600;letter-spacing:0.04em;text-transform:uppercase;margin-bottom:8px">FX Impact from Today's Commodity Moves</div>
+<div style="display:grid;gap:4px">
+${fxSorted.map(([ccy,data])=>{
+  const col=data.score>0?'var(--green)':'var(--red)';
+  const bg=data.score>0?'var(--green-d)':'var(--red-d)';
+  const maxScore=Math.max(...fxSorted.map(([,d])=>Math.abs(d.score)),0.1);
+  const barPct=Math.min(Math.abs(data.score)/maxScore*100,100);
+  const drivers=data.drivers.map(d=>`${d.icon}${d.chg>0?'+':''}${d.chg.toFixed(1)}%`).join(' ');
+  
+  return`<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surf);border:1px solid var(--brd);border-radius:6px;${Math.abs(data.score)>0.3?'border-left:3px solid '+col:''}">
+    <span style="font-size:16px;width:24px">${FX_FL[ccy]||''}</span>
+    <span style="font-size:12px;font-weight:700;font-family:var(--mono);width:36px">${ccy}</span>
+    <div style="flex:1;height:14px;background:var(--surf2);border-radius:3px;overflow:hidden;position:relative">
+      <div style="position:absolute;top:0;${data.score>=0?'left:50%':'right:50%'};width:${barPct/2}%;height:100%;background:${col};opacity:0.4;border-radius:3px"></div>
+      <div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:var(--brd2)"></div>
+    </div>
+    <span style="font-size:11px;font-weight:700;font-family:var(--mono);color:${col};min-width:55px;text-align:right">${data.score>=0?'+':''}${data.score.toFixed(3)}</span>
+    <span style="font-size:9px;font-family:var(--mono);color:var(--t3);min-width:80px">${drivers||'—'}</span>
+  </div>`;
+}).join('')}</div>`;
+
+// Insights
+const benefiting=fxSorted.filter(([,d])=>d.score>0.1).map(([c])=>c);
+const suffering=fxSorted.filter(([,d])=>d.score<-0.1).map(([c])=>c);
+const biggestComm=commData.reduce((a,b)=>Math.abs(b.dayChg)>Math.abs(a.dayChg)?b:a,commData[0]);
+
+ins.innerHTML=`<div style="padding:12px 14px;background:var(--surf);border:1px solid var(--brd);border-radius:8px;font-size:11px;font-family:var(--mono);color:var(--t2);line-height:1.8">
+<strong style="color:var(--t1);font-size:12px">Commodity → FX Analysis:</strong><br>
+${biggestComm?`Today's biggest mover: <strong>${biggestComm.icon} ${biggestComm.name}</strong> (${biggestComm.dayChg>=0?'+':''}${biggestComm.dayChg.toFixed(2)}%).<br>`:''}
+${benefiting.length?`<span style="color:var(--green)">▲ Benefiting:</span> <strong>${benefiting.join(', ')}</strong> — commodity exporters gaining from price rises.<br>`:''}
+${suffering.length?`<span style="color:var(--red)">▼ Under pressure:</span> <strong>${suffering.join(', ')}</strong> — importers hurt by higher commodity costs.<br>`:''}
+<br><strong style="color:var(--t1)">How to use this:</strong><br>
+• If oil surges → buy CAD, sell JPY (Canada exports, Japan imports)<br>
+• If copper drops → sell AUD (Australia's biggest export)<br>
+• If gold rallies → AUD and ZAR benefit; safe-haven flows also support CHF<br>
+• Combine with the <strong>CB Policy</strong> tab: a dovish central bank + negative commodity exposure = strong sell signal for that currency.
+</div>`;
+
+btn.disabled=false;btn.textContent='Refresh';
+showAPIStatus('Commodity-FX data loaded','green');
+}
+
 // ═══ REDRAW ═══
 function redrawAll(){
 // Redraw ETF charts
@@ -2798,10 +3103,67 @@ let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(redr
 // ═══ INIT ═══
 function updLbls(){document.getElementById('etfLeg').innerHTML=TIERS.map(t=>`<div class="leg-i" style="font-size:7.5px"><div class="leg-l" style="background:${t.c}"></div><span style="color:${t.c}">${t.l} DISCOUNT</span></div>`).join('');TIERS.forEach((t,i)=>{const h=document.getElementById('btH'+i);if(h){h.textContent='-'+t.l;h.style.color=t.c}})}
 function init(){updLbls();const g=document.getElementById('etfGrid');ETFS.forEach((e,i)=>{const c=document.createElement('div');c.id='ec-'+e.s;c.className='card';c.style.animationDelay=(i*0.04)+'s';c.innerHTML=`<div style="display:flex;justify-content:space-between"><div><span class="sym" style="color:${e.c}">${e.s}</span><div style="font-size:8px;color:var(--t3)">${e.n}</div></div><div class="skel" style="width:65px;height:16px"></div></div><div class="skel" style="width:100%;height:100px;margin-top:8px"></div>`;g.appendChild(c)});const sel=document.getElementById('cDisc');sel.innerHTML='<option value="0">Full Price</option>';TIERS.forEach(t=>{const o=document.createElement('option');o.value=t.p*100;o.textContent=t.l;sel.appendChild(o)});sel.value='25';calcUpd();
-// Load dashboard first, then ETFs in background
+
+// ═══ AUTO-REFRESH SYSTEM ═══
 addDebug('Starting — loading dashboard...', 'ok');
 showAPIStatus('Loading dashboard...', 'green');
+
+// 1. Load dashboard first, then ETFs
 loadDashboard().then(()=>loadETFs());
+
+// 2. Auto-refresh dashboard every 5 minutes while tab is open
+setInterval(()=>{
+  dashLoaded=false; // force refresh
+  if(document.getElementById('p-dash').classList.contains('vis')){
+    loadDashboard();
+  }
+}, 5 * 60 * 1000);
+
+// 3. Check if trade ideas need generating today
+const today=new Date().toISOString().split('T')[0];
+const lastIdeaDate=ideasLog.length?ideasLog[0].date:null;
+if(lastIdeaDate!==today){
+  addDebug('New day — trade ideas will generate on dashboard','info');
+  // Auto-generate after dashboard loads
+  setTimeout(()=>{
+    if(!ideasLog.find(i=>i.date===today)){
+      addDebug('Auto-generating today\'s trade ideas...','info');
+      generateIdeas();
+    }
+  }, 30000); // 30s after startup to not overwhelm API
+}
+
+// 4. Check past idea results once per session
+const lastCheck=localStorage.getItem('td-ideas-last-check');
+if(lastCheck!==today){
+  setTimeout(()=>{
+    checkPastIdeas();
+    localStorage.setItem('td-ideas-last-check',today);
+  }, 60000); // 60s after startup
+}
+
+// 5. Show last update time and next refresh countdown
+function updateRefreshUI(){
+  const now=new Date();
+  document.getElementById('lastUpd').textContent='Updated '+now.toLocaleTimeString();
+}
+updateRefreshUI();
+
+// 6. Visibility API — refresh when user comes back to tab after being away
+let lastVisible=Date.now();
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden){
+    const away=Date.now()-lastVisible;
+    if(away>5*60*1000){ // been away more than 5 minutes
+      addDebug('Tab refocused after '+Math.round(away/60000)+'min — refreshing...','info');
+      dashLoaded=false;
+      loadDashboard();
+      updateRefreshUI();
+    }
+  }else{
+    lastVisible=Date.now();
+  }
+});
 }
 init();
 </script>
